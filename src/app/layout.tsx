@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import TabNavigation from '../components/TabNavigation'
 import './globals.css'
 import Provider from './provider'
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({
     <html lang="ko">
       <body>
         <Provider>
+          <TabNavigation />
           {children}
         </Provider>
         

@@ -1,8 +1,27 @@
 
 //==================================================================================================
-//==================================== API Error Code Parse ========================================
+//==================================== TX ========================================
 //==================================================================================================
 
+export enum TxState {
+    PENDING = 0,
+    FAILED = 104,
+    SUCCESS = 200,
+}
+export interface TxReceipt {
+    state : TxState
+}
+
+//==================================================================================================
+//==================================== SALE ========================================
+//==================================================================================================
+
+export interface PageOffsetInfo {
+    offset: number; //페이지 오프셋 인덱스 ( 0 : 첫페이지 )
+    limit: number; //페이지 요청 수량 제한
+    last_offset: number; //마지막 페이지 오프셋 인덱스
+    item_list_total: number; //페이지 요청 수량 제한 총 개수
+}
 export interface TokenBalanceInfo {
     token: string; //토큰 주소(USDT)
     symbol: string; //토큰 심볼(USDT)
@@ -11,11 +30,7 @@ export interface TokenBalanceInfo {
     decimals: number; //토큰 소수점
 }
 
-export interface HistoryInfo {
-    offset: number; //페이지 오프셋 인덱스 ( 0 : 첫페이지 )
-    limit: number; //페이지 요청 수량 제한
-    last_offset: number; //마지막 페이지 오프셋 인덱스
-    item_list_total: number; //페이지 요청 수량 제한 총 개수
+export interface HistoryInfo extends PageOffsetInfo {
     historys: HistorySetData[]; //히스토리 리스트
 }
 
@@ -74,11 +89,29 @@ export interface HistoryData {
 }
 
 
-export enum TxState {
-    PENDING = 0,
-    FAILED = 104,
-    SUCCESS = 200,
+
+
+//==================================================================================================
+//==================================== POINT ========================================
+//==================================================================================================
+
+
+export interface PointServerCallbackInfo {
+    is_exchange: boolean,
+    exchange_time: string
 }
-export interface TxReceipt {
-    state : TxState
+export interface PointHistoryData extends PointServerCallbackInfo {
+    amount: string,
+    tx_hash: string,
+    tx_time: string,
+}
+export interface PointHistoryInfo extends PageOffsetInfo {
+    logs: PointHistoryData[]
+}
+export interface ResUserPointInfo extends PointHistoryInfo {
+    point_wallet_address: string;
+}
+
+export interface ClientUserPointInfo {
+    point_info: ResUserPointInfo;
 }

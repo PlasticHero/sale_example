@@ -1,6 +1,7 @@
+import { transfer } from "lib/contract/erc20";
 import { USER_HISTORY_PAGING_LIMIT } from "lib/define";
 import { api } from "lib/server/api";
-import { TokenBalanceInfo, TxReceipt, TxState, UserSaleInfo } from "lib/server/interface";
+import { ClientUserPointInfo, ResUserPointInfo, TokenBalanceInfo, TxReceipt, TxState, UserSaleInfo } from "lib/server/interface";
 import { isMobile } from "react-device-detect";
 import { makeDataApprove, makeDataDeposit } from "../contract/sale";
 import { Account, CLIENT_RESULT_CODE, CONVERT_ERROR_WALLET } from "../interface";
@@ -11,7 +12,7 @@ import { WALLET_TYPE, walletLib } from "../wallet/walletlib";
 import { makeStore } from "./store";
 
 //[작성] 상태 자료형 ====================================================================
-interface State extends Account, UserSaleInfo {
+interface State extends Account, UserSaleInfo, ClientUserPointInfo {
 }
 
 //[작성] 액션 자료형 ====================================================================
@@ -78,6 +79,14 @@ const state: State = {
               decimals: 0
           }
       }
+  },
+  point_info: {
+    offset: 0,
+    limit: 0,
+    last_offset: 0,
+    item_list_total: 0,
+    point_wallet_address: "",
+    logs: []
   }
 }
 
@@ -100,20 +109,46 @@ const actions = (
   },
 
   userInfo: async (): Promise<void> => {
-    const res = await api.user_info(get().address, 0, USER_HISTORY_PAGING_LIMIT)
-    if(res.success && res.data) {
-      const uInfo = res.data as UserSaleInfo
-      set((state: State & Actions) => ({ ...uInfo }))
+
+    {//sale info
+      const res = await api.user_info(get().address, 0, USER_HISTORY_PAGING_LIMIT)
+      if(res.success && res.data) {
+        const uInfo = res.data as UserSaleInfo
+        set((state: State & Actions) => ({ ...state, user_info: uInfo.user_info, sale_info: uInfo.sale_info }))
+      }
     }
+
+    {//point info
+      const res = await api.point_info(get().address, 0, USER_HISTORY_PAGING_LIMIT)
+      if(res.success && res.data) {
+        const pInfo = res.data as ResUserPointInfo
+        set((state: State & Actions) => ({ ...state, point_info: pInfo }))
+      }
+    }
+
+    
+    
   },
 
+  //sale history
   userHistory: async (offset: number): Promise<void> => {
     const res = await api.user_info(get().address, offset, USER_HISTORY_PAGING_LIMIT)
     if(res.success && res.data) {
       const uInfo = res.data as UserSaleInfo
-      set((state: State & Actions) => ({ ...uInfo }))
+      set((state: State & Actions) => ({ ...state, user_info: uInfo.user_info, sale_info: uInfo.sale_info }))
     }
   },
+
+
+  //point history
+  userPointHistory: async (offset: number): Promise<void> => {
+    const res = await api.point_info(get().address, offset, USER_HISTORY_PAGING_LIMIT)
+    if(res.success && res.data) {
+      const pInfo = res.data as ResUserPointInfo
+      set((state: State & Actions) => ({ ...state, point_info: pInfo }))
+    }
+  },
+
 
   getUsdtInfo: (chain: 'eth' | 'bsc'): TokenBalanceInfo => {
     const user_info = get().user_info
@@ -242,6 +277,7 @@ const actions = (
     return CLIENT_RESULT_CODE.SUCCESS;
   },
 
+  //sale deposit
   deposit: async (chain: 'eth' | 'bsc', usdt_token: string, amount: number): Promise<CLIENT_RESULT_CODE> => {
     
     const userTargetChainInfo = get().user_info[chain]
@@ -311,6 +347,78 @@ const actions = (
     return CLIENT_RESULT_CODE.SUCCESS;
   },
 
+  //babi token point conversion
+  conversionBabiPoint: async (amount: number): Promise<CLIENT_RESULT_CODE> => {
+    
+    const babi_token = get().sale_info.bsc.pay_token_info.address
+    const babi_decimals = get().sale_info.bsc.pay_token_info.decimals
+    
+    const point_wallet_address = get().point_info.point_wallet_address
+    const from = get().address
+
+    if(!babi_token) {
+      return CLIENT_RESULT_CODE.WALLET_UN_RECOGNIZED_CHAIN_ID
+    }
+    if(!point_wallet_address) {
+      return CLIENT_RESULT_CODE.WALLET_UN_RECOGNIZED_CHAIN_ID
+    }
+    const amountWei = token2wei(amount, babi_decimals)
+    
+    //make tx param
+    const chainInfo = getChainInfoByKey('bsc')
+    const chainIdHex = `0x${Number(chainInfo.chainId).toString(16)}`
+    const paramChain = USE_NETWORKS.find(n => n.chainId === chainIdHex)
+    if(!paramChain) {
+      return CLIENT_RESULT_CODE.WALLET_UN_RECOGNIZED_CHAIN_ID
+    }
+
+    
+    const txParam: ParamSendTransaction = {
+      type: chainInfo?.transaction_type ?? '0x0',
+      chainId: chainIdHex,
+      from: from,
+      to: babi_token,
+      data: transfer(point_wallet_address, amountWei.toString())
+    }
+
+    const prevItemListTotal = get().point_info.item_list_total || 0
+
+    //tx send
+    const res = await walletLib.sendTransactionWithChain(get().wallet_type, txParam, paramChain)
+
+    if(res.result !== RESULT_CODE.SUCCESS) {
+      if(res.result === RESULT_CODE.NOT_CONNECTED) {
+        await get().disconnectWallet()
+        return CLIENT_RESULT_CODE.WALLET_DISCONNECTED
+      }
+      return CONVERT_ERROR_WALLET[res.result] || CLIENT_RESULT_CODE.UNKNOWN
+    }
+
+    //tx receipt
+    const resReceipt = await get().txReceipt(chainInfo.chainId, res.data)
+
+    if(resReceipt.result !== CLIENT_RESULT_CODE.SUCCESS) {
+      return resReceipt.result 
+    }
+
+    const MAX_RETRY_TIME_MS = 1000 * 30
+    const refreshStartTime = Date.now()
+    while(refreshStartTime + MAX_RETRY_TIME_MS > Date.now()) {
+      await get().userInfo()
+
+      const findEmpty = get().point_info.logs.find(f=>f.tx_hash === '')
+
+      const currentItemListTotal = get().point_info.item_list_total || 0
+      const isChanged = prevItemListTotal != currentItemListTotal && !findEmpty
+      if(isChanged) {
+        break;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    return CLIENT_RESULT_CODE.SUCCESS;
+  },
 
   addRewardChain: async (): Promise<CLIENT_RESULT_CODE> => {
     const chainInfo = getChainInfoByKey('bsc')
