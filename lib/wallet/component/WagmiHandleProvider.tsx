@@ -4,9 +4,8 @@ import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { defineChain, http } from 'viem';
-import { Connector, cookieStorage, createConfig, createStorage, useAccount, useConnect, useDisconnect, WagmiProvider } from 'wagmi';
+import { Connector, createConfig, useAccount, useConnect, useDisconnect, WagmiProvider } from 'wagmi';
 import { metaMask } from 'wagmi/connectors';
-import { DisconnectMutate } from 'wagmi/query';
 import { IS_MAINNET, USE_NETWORKS } from '../define';
 import { EIP1193Provider, ParamAddChain, RequestArguments, RESULT_CODE } from '../interface/interface';
 
@@ -39,10 +38,10 @@ const config =  createConfig({
   connectors: [
     metaMask(),
   ],
-  storage: createStorage({
-    storage: cookieStorage,
-  }),
-  ssr: true,
+  // storage: createStorage({
+  //   storage: cookieStorage,
+  // }),
+  // ssr: true,
   transports: transports,
 })
 
@@ -54,18 +53,26 @@ export class WagmiConnectProvider implements EIP1193Provider {
   status: STATUS = 'disconnected';
   eventMap:Map<string, (...args: any[]) => void> = new Map();
   connector: Connector | undefined = undefined;
+  connectedConnector:Connector | undefined = undefined;
   connectFn: any = undefined;
-  disconnectFn:DisconnectMutate<unknown> | undefined = undefined;
+  disconnectFn:any = undefined;
   
-  onChangedConnectFn= (cf: any, dcf: DisconnectMutate<unknown> | undefined) => {
+
+  onChangeConnectFn = (cf: any) => {
     this.connectFn = cf;
+  }
+
+  onChangeDisconnectFn = (dcf: any) => {
     this.disconnectFn = dcf;
   }
 
+  onChangedConnectedConnector = (connector: Connector | undefined) => {
+    this.connectedConnector = connector;
+  }
   onChangedConnector = (connector: Connector | undefined) => {
-    // console.log('onChangedConnector : ' , connector)
     this.connector = connector;
   }
+  
   onChangedAddress = (address: string) => {
     // console.log('onChangedAddress : ' , address)
     this.address = address;
@@ -126,6 +133,17 @@ export class WagmiConnectProvider implements EIP1193Provider {
     
   }
 
+  _clearWagmiCookies = () => {
+    return;
+    const cookies = document.cookie.split(';');
+    cookies.forEach(cookie => {
+      const cookieName = cookie.split('=')[0].trim();
+      if(cookieName.startsWith('wagmi.')) {
+        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+      }
+    });
+  }
+
   _eth_requestAccounts = async (args: RequestArguments): Promise<string[]> => {
     try{
       
@@ -138,6 +156,10 @@ export class WagmiConnectProvider implements EIP1193Provider {
         return [this.address];
       }
 
+
+      this._clearWagmiCookies();
+
+
       const res = await this.connectFn({
         connector: this.connector,
         chainId: chains[0].id
@@ -148,10 +170,21 @@ export class WagmiConnectProvider implements EIP1193Provider {
       }
     } catch(error) {
       console.log('[RP] _eth_requestAccounts-error : ' , error)
-      throw error;
+      return [];
     }
 
-    // throw { code: 4001, message: "user rejected" }
+
+    const RETRY_COUNT = 5;
+
+    let retryCount = 0;
+    while(retryCount < RETRY_COUNT) {
+      if(this.address) {
+        return [this.address];
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      retryCount++;
+    }
+
     return [];
   }
   _wallet_revokePermissions = async (args: RequestArguments): Promise<boolean> => {
@@ -161,19 +194,21 @@ export class WagmiConnectProvider implements EIP1193Provider {
 
     let retryCount = 0;
     while(retryCount < RETRY_COUNT) {
-      if(this.disconnectFn) {
-        this.disconnectFn();
+      if(this.disconnectFn && this.connectedConnector) {
+        this.disconnectFn({connector: this.connectedConnector});
       }
       const startTime = Date.now();
       while(startTime + RETRY_INTERVAL_MS > Date.now()) {
 
         if(this.status === 'disconnected') {
+          this._clearWagmiCookies();
           return true;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       retryCount++;
     }
+    this._clearWagmiCookies();
     return false;
   }
 
@@ -190,25 +225,27 @@ function WagmiHandler() {
     connector,
   } = useAccount();
   
-  const { disconnect } = useDisconnect();
-  const { connect, connectAsync, connectors } = useConnect();
-
+  const { disconnectAsync } = useDisconnect();
+  const { connectAsync, connectors } = useConnect();
+ 
+  useEffect(()=>{
+    wagmiConnectProvider.onChangeConnectFn(connectAsync);
+  },[connectAsync])
 
   useEffect(()=>{
-    wagmiConnectProvider.onChangedConnectFn(connectAsync, disconnect);
-  },[connectAsync, disconnect])
+    wagmiConnectProvider.onChangeDisconnectFn(disconnectAsync);
+  },[disconnectAsync])
 
   useEffect(()=>{
-    // console.log('changed connector : ' , connector, ' / ', connectors)
-    if(connector) {
+    wagmiConnectProvider.onChangedConnectedConnector(connector);
+  },[connector])
+
+  useEffect(()=>{
+    if(connectors.length > 0) {
+      const connector = connectors[0];
       wagmiConnectProvider.onChangedConnector(connector);
-    } else {
-      if(connectors.length > 0) {
-        const connector = connectors[0];
-        wagmiConnectProvider.onChangedConnector(connector);
-      }
     }
-  },[connectors, connector])
+  },[connectors])
   
   useEffect(()=>{
     wagmiConnectProvider.onChangedAddress(address || '');

@@ -1,5 +1,4 @@
-import { EIP1193Provider, ParamChain } from "../interface/interface";
-import { EventCallback, EventName, IWallet, ParamAddChain, ParamAddToken, ParamEthSignTypedDataV4, ParamPersonalSign, ParamSendTransaction, ParamSwitchChain, REQUEST_METHOD, Response, RESULT_CODE } from "../interface/interface";
+import { EIP1193Provider, EventCallback, EventName, IWallet, ParamAddChain, ParamAddToken, ParamChain, ParamEthSignTypedDataV4, ParamPersonalSign, ParamSendTransaction, ParamSwitchChain, REQUEST_METHOD, Response, RESULT_CODE } from "../interface/interface";
 
 
 
@@ -25,8 +24,14 @@ export class Wagmiconnect implements IWallet {
         if(res.result === RESULT_CODE.SUCCESS) {
             if(res.data && res.data.length > 0) {
                 return {...res, data: res.data[0]}
+            } else {
+                return {
+                    result: RESULT_CODE.ACCOUNT_NOT_FOUND,
+                    data: undefined
+                }
             }
         }
+
         return res
     }
     async ethChainId(): Promise<Response> {
@@ -79,7 +84,7 @@ export class Wagmiconnect implements IWallet {
         const request = {method: method, params: params, chainId: chainId}
         try {
             console.log('[WalletConnect] request : ' , method, params)
-            let res = await this.#provider.request(request)
+            const res = await this.#provider.request(request)
             console.log('[WalletConnect] response : ' , res)
             return {
                 result: RESULT_CODE.SUCCESS,
