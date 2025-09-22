@@ -41,6 +41,12 @@ export interface PayTokenInfo {
     decimals: number; //지급 토큰 소수점
 }
 
+export interface BnbInfo {
+    paused: boolean; //판매 중지 여부
+    min_deposit: string; //최소 입금 금액(wei)
+    max_deposit: string; //최대 입금 금액(wei)
+    token_per_bnb: string; //1BNB 당 지급 토큰 수량
+}
 export interface SaleContractInfo {
     address: string; //판매 컨트랙트 주소
     pay_token_balance: string; //판매 컨트랙트 지급 토큰 잔액(wei)
@@ -48,6 +54,7 @@ export interface SaleContractInfo {
     min_deposit: string; //최소 입금 금액(wei)
     max_deposit: string; //최대 입금 금액(wei)
     token_per_usd: string; //1USDT 당 지급 토큰 수량
+    bnb: BnbInfo; //BNB 정보
 }
 
 export interface SaleChainInfo {

@@ -3,7 +3,7 @@ import { USER_HISTORY_PAGING_LIMIT } from "lib/define";
 import { api } from "lib/server/api";
 import { ClientUserPointInfo, ResUserPointInfo, TokenBalanceInfo, TxReceipt, TxState, UserSaleInfo } from "lib/server/interface";
 import { isMobile } from "react-device-detect";
-import { makeDataApprove, makeDataDeposit } from "../contract/sale";
+import { makeDataApprove, makeDataDeposit, makeDataDepositBNB } from "../contract/sale";
 import { Account, CLIENT_RESULT_CODE, CONVERT_ERROR_WALLET } from "../interface";
 import { Storage, STORAGE_KEY } from "../storage/storage";
 import { getChainInfoByKey, token2wei, TX_WAIT_TIME_MS, USE_NETWORKS } from "../wallet/define";
@@ -24,6 +24,7 @@ interface Actions  {
   addRewardChain: () => Promise<CLIENT_RESULT_CODE>;
   approve: (chain: 'eth' | 'bsc', usdt_token: string) => Promise<CLIENT_RESULT_CODE>;
   deposit: (chain: 'eth' | 'bsc', usdt_token: string, amount: number) => Promise<CLIENT_RESULT_CODE>;
+  depositBNB: (amount: number) => Promise<CLIENT_RESULT_CODE>;
 }
 
 //[작성] 상태 초기값 ====================================================================
@@ -56,7 +57,14 @@ const state: State = {
               paused: false,
               min_deposit: "0",
               max_deposit: "0",
-              token_per_usd: "0"
+              token_per_usd: "0",
+              bnb: {
+                paused: false,
+                min_deposit: "0",
+                max_deposit: "0",
+                token_per_bnb: "0"
+              }
+
           },
           pay_token_info: {
               address: "",
@@ -71,7 +79,13 @@ const state: State = {
               paused: false,
               min_deposit: "0",
               max_deposit: "0",
-              token_per_usd: "0"
+              token_per_usd: "0",
+              bnb: {
+                paused: false,
+                min_deposit: "0",
+                max_deposit: "0",
+                token_per_bnb: "0"
+              }
           },
           pay_token_info: {
               address: "",
@@ -307,6 +321,73 @@ const actions = (
       to: sale_contract,
       data: makeDataDeposit(usdt_token, amountWei.toString())
     }
+
+    const prevItemListTotal = get().user_info.item_list_total || 0
+
+    //tx send
+    const res = await walletLib.sendTransactionWithChain(get().wallet_type, txParam, paramChain)
+
+    if(res.result !== RESULT_CODE.SUCCESS) {
+      if(res.result === RESULT_CODE.NOT_CONNECTED) {
+        await get().disconnectWallet()
+        return CLIENT_RESULT_CODE.WALLET_DISCONNECTED
+      }
+      return CONVERT_ERROR_WALLET[res.result] || CLIENT_RESULT_CODE.UNKNOWN
+    }
+
+    //tx receipt
+    const resReceipt = await get().txReceipt(chainInfo.chainId, res.data)
+
+    if(resReceipt.result !== CLIENT_RESULT_CODE.SUCCESS) {
+      return resReceipt.result 
+    }
+
+    const MAX_RETRY_TIME_MS = 1000 * 30
+    const refreshStartTime = Date.now()
+    while(refreshStartTime + MAX_RETRY_TIME_MS > Date.now()) {
+      await get().userInfo()
+
+      const findEmpty = get().user_info.historys.find(f=>f.pay.tx_hash === '')
+
+      const currentItemListTotal = get().user_info.item_list_total || 0
+      const isChanged = prevItemListTotal != currentItemListTotal && !findEmpty
+      if(isChanged) {
+        break;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    return CLIENT_RESULT_CODE.SUCCESS;
+  },
+
+
+  depositBNB: async (amount: number): Promise<CLIENT_RESULT_CODE> => {
+    
+    const sale_contract = get().sale_info.bsc.sale_contract.address
+    const from = get().address
+
+    
+    const amountWei = token2wei(amount, 18)
+    
+    //make tx param
+    const chainInfo = getChainInfoByKey('bsc')
+    const chainIdHex = `0x${Number(chainInfo.chainId).toString(16)}`
+    const paramChain = USE_NETWORKS.find(n => n.chainId === chainIdHex)
+    if(!paramChain) {
+      return CLIENT_RESULT_CODE.WALLET_UN_RECOGNIZED_CHAIN_ID
+    }
+
+    
+    const txParam: ParamSendTransaction = {
+      type: chainInfo?.transaction_type ?? '0x0',
+      chainId: chainIdHex,
+      from: from,
+      to: sale_contract,
+      data: makeDataDepositBNB(amountWei.toString()),
+      value: amountWei.toHexString()
+    }
+    // console.log('txParam, ', txParam)
 
     const prevItemListTotal = get().user_info.item_list_total || 0
 

@@ -64,6 +64,33 @@ export default function TabNavigation() {
           </button>
           
           <button
+            onClick={() => handleTabClick('/sale-bnb')}
+            style={{
+              padding: '16px 24px',
+              border: 'none',
+              backgroundColor: 'transparent',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              borderBottom: pathname === '/sale-bnb' ? '3px solid #2563eb' : '3px solid transparent',
+              color: pathname === '/sale-bnb' ? '#2563eb' : '#6b7280',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (pathname !== '/sale-bnb') {
+                e.currentTarget.style.color = '#374151'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (pathname !== '/sale-bnb') {
+                e.currentTarget.style.color = '#6b7280'
+              }
+            }}
+          >
+            토큰 세일(BNB)
+          </button>
+
+          <button
             onClick={() => handleTabClick('/point')}
             style={{
               padding: '16px 24px',
