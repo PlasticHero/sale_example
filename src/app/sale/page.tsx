@@ -88,7 +88,7 @@ export default function SalePage() {
     }
     
 
-    if(amount > 0) {
+    if(amount > 10) {
       const minAmount = getMinDepositAmount()
       if (amount < minAmount) {
         setErrorMessage(`최소 구매 금액은 ${minAmount} USDT입니다.`)

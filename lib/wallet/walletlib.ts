@@ -1,5 +1,5 @@
-
 import { wagmiConnectProvider } from "./component/WagmiHandleProvider";
+import { IS_MAINNET } from "./define";
 import { EIP6963AnnounceProviderEvent, EIP6963ProviderDetail, IEthereumWalletMethods, IWallet, ParamAddChain, ParamAddToken, ParamEthSignTypedDataV4, ParamPersonalSign, ParamSendTransaction, ParamSwitchChain, Response, RESULT_CODE } from "./interface/interface";
 import { MetaMask } from "./wallets/metamask";
 import { Wagmiconnect } from "./wallets/wagmiconnect";
@@ -142,16 +142,25 @@ class WalletLib {
     // }
     async sendTransactionWithChain(wallet_Type: WALLET_TYPE, param: ParamSendTransaction, paramChain: ParamAddChain): Promise<Response> {
         if(wallet_Type === WALLET_TYPE.WalletConnect) {
+            
             const resChainId = await this.ethChainId(wallet_Type)
-            if(resChainId.result === RESULT_CODE.NOT_CONNECTED) return resChainId;
             if(IS_DEV) console.log('resChainId : ' , resChainId, ', req-chain : ' , Number(paramChain.chainId))
+            if(resChainId.result === RESULT_CODE.NOT_CONNECTED) return resChainId;
             if(Number(resChainId.data) !== Number(paramChain.chainId)) {
-                const resAddChain = await this.addChain(wallet_Type, paramChain);
-                if(IS_DEV) console.log('resAddChain : ' , resAddChain)
-                if(resAddChain.result === RESULT_CODE.USER_REJECTED) return resAddChain;
-                if(resAddChain.result === RESULT_CODE.SUCCESS) {
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+
+                if(IS_MAINNET) {
+                    const resSwitchChain = await this.switchChain(wallet_Type, {chainId: paramChain.chainId});
+                    if(IS_DEV) console.log('resSwitchChain : ' , resSwitchChain)
+                    if(resSwitchChain.result === RESULT_CODE.USER_REJECTED) return resSwitchChain;
+                } else {
+                    const resAddChain = await this.addChain(wallet_Type, paramChain);
+                    if(IS_DEV) console.log('resAddChain : ' , resAddChain)
+                    if(resAddChain.result === RESULT_CODE.USER_REJECTED) return resAddChain;
+                    if(resAddChain.result === RESULT_CODE.SUCCESS) {
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                    }
                 }
+
             }
             
         } else {
