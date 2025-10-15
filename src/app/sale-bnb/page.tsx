@@ -66,7 +66,6 @@ export default function SalePage() {
     const maxAmount = getMaxDepositAmount()
 
     const balance = wei2eth(user_info.bsc.coin_balance)
-    console.log('max : ' , balance, maxAmount)
     const max = Math.min(maxAmount, balance)
  
     // 값이 최대 구매 가능 금액을 초과하는 경우 최대값으로 제한
@@ -96,7 +95,7 @@ export default function SalePage() {
       return
     }
     // 구매 성공 로직
-    const res = await depositBNB(amount)
+    const res = await depositBNB(amount, 'bsc')
     console.log(res)
     if(res !== CLIENT_RESULT_CODE.SUCCESS) {
       console.log(res)

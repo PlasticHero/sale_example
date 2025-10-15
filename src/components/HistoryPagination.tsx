@@ -222,7 +222,7 @@ export default function HistoryPagination() {
                   {/* 수량 */}
                   <td style={{ padding: '8px 10px', textAlign: 'right' }}>
                     <div style={{ fontWeight: '600', color: '#1f2937', fontSize: '13px' }}>
-                      {formatNumber(wei2token(history.amount, 18), 2)} {history === historySet.deposit ? 'USDT' : 'BABI'}
+                      {formatNumber(wei2token(history.amount, 18), 2)} {history === historySet.deposit ? getChainInfoByKey(historySet.deposit.chain).coinSymbol : 'BABI'}
                     </div>
                   </td>
                   

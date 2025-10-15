@@ -63,7 +63,7 @@ export default function TabNavigation() {
             토큰 세일
           </button>
           
-          <button
+          {/* <button
             onClick={() => handleTabClick('/sale-bnb')}
             style={{
               padding: '16px 24px',
@@ -88,7 +88,7 @@ export default function TabNavigation() {
             }}
           >
             토큰 세일(BNB)
-          </button>
+          </button> */}
 
           <button
             onClick={() => handleTabClick('/point')}

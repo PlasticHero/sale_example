@@ -1,10 +1,10 @@
 'use client'
 
 import { CLIENT_RESULT_CODE } from 'lib/interface'
-import { TokenBalanceInfo } from 'lib/server/interface'
+import { SaleChainInfo } from 'lib/server/interface'
 import { accountStore } from 'lib/store/accountStore'
 import { formatNumber } from 'lib/utils/numberUtils'
-import { wei2eth, wei2token } from 'lib/wallet/define'
+import { getChainInfoByKey, wei2eth } from 'lib/wallet/define'
 import { WALLET_TYPE } from 'lib/wallet/walletlib'
 import { useEffect, useState } from 'react'
 import HistoryPagination from '../../components/HistoryPagination'
@@ -20,27 +20,16 @@ enum ButtonState {
 
 export default function SalePage() {
 
-  const { address, sale_info, user_info, getUsdtInfo, initAccount, connectWallet, disconnectWallet, approve, deposit } = accountStore()
-  
-  const [selectChain, setSelectChain] = useState<'bsc' | 'eth'>('bsc')
-
+  const { address, sale_info, user_info, initAccount, connectWallet, disconnectWallet, depositBNB } = accountStore()
+  const [selectChain, setSelectChain] = useState<'bsc' | 'eth' | 'stream'>('bsc')
   const [balanceBabi, setBalanceBabi] = useState('0')
-  const [usdtInfo, setUsdtInfo] = useState<TokenBalanceInfo>({
-    token: '',
-    symbol: '',
-    balance: '0',
-    allowance: '0',
-    decimals: 0
-  })
-
   const [inputAmount, setInputAmount] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
 
   useEffect(()=>{
     if(user_info) {
-      setBalanceBabi(wei2eth(user_info.bsc.pay_token_balance).toString())
-      setUsdtInfo(getUsdtInfo(selectChain))
+      setBalanceBabi(wei2eth(user_info.stream.pay_token_balance).toString())
     }
 
   },[user_info, sale_info, selectChain])
@@ -77,8 +66,7 @@ export default function SalePage() {
     const amount = value && value.length > 0 && Number(value) > 0 ? parseFloat(value) : 0
     const maxAmount = getMaxDepositAmount()
 
-    const balance = wei2token(usdtInfo?.balance || '0', Number(usdtInfo?.decimals || 0))
-    
+    const balance = wei2eth(user_info[selectChain].coin_balance)
     const max = Math.min(maxAmount, balance)
     // 값이 최대 구매 가능 금액을 초과하는 경우 최대값으로 제한
     if (!isNaN(amount) && amount > max) {
@@ -91,7 +79,8 @@ export default function SalePage() {
     if(amount > 10) {
       const minAmount = getMinDepositAmount()
       if (amount < minAmount) {
-        setErrorMessage(`최소 구매 금액은 ${minAmount} USDT입니다.`)
+        
+        setErrorMessage(`최소 구매 금액은 ${minAmount} ${getChainInfoByKey(selectChain).coinSymbol}입니다.`)
         return
       }
     }
@@ -101,23 +90,14 @@ export default function SalePage() {
   // 구매 핸들러
   const handlePurchase = async() => {
 
-    if(!isApproved()) {
-      const res = await approve(selectChain, usdtInfo.token)
-      console.log(res)
-      if(res !== CLIENT_RESULT_CODE.SUCCESS) {
-        alert('Approve 에러 : ' + res)
-        return;
-      }
-      console.log('approve 성공')
-      return;
-    }
     const amount = getInputAmount();
-    if (amount > parseFloat(wei2token(usdtInfo.balance, Number(usdtInfo.decimals)).toString())) {
+    const balance = wei2eth(user_info[selectChain].coin_balance)
+    if (amount > parseFloat(balance.toString())) {
       setErrorMessage('잔액이 부족합니다.')
       return
     }
     // 구매 성공 로직
-    const res = await deposit(selectChain, usdtInfo.token, amount)
+    const res = await depositBNB(amount, selectChain)
     console.log(res)
     if(res !== CLIENT_RESULT_CODE.SUCCESS) {
       console.log(res)
@@ -135,55 +115,53 @@ export default function SalePage() {
 
   function getMinDepositAmount(): number {
     if(sale_info && sale_info[selectChain]) {
-      return wei2eth(sale_info[selectChain].sale_contract.min_deposit)
+      return wei2eth(sale_info[selectChain].sale_contract.bnb.min_deposit)
     }
     return 0;
   }
-  function getMaxDepositAmount(): number {
 
-    const payTokenBalance = wei2eth(sale_info?.bsc?.sale_contract?.pay_token_balance || '0')
-    const maxDeposit = wei2eth(sale_info?.[selectChain]?.sale_contract?.max_deposit || '0')
-    const tokenPerUsd = wei2eth(sale_info?.[selectChain]?.sale_contract?.token_per_usd || '0')
-    if(tokenPerUsd > 0 && payTokenBalance > 0 && maxDeposit > 0) {
-      const maxPossibleDepositAmount = payTokenBalance / tokenPerUsd
+  function getSaleInfo(): SaleChainInfo | null {
+    if(!sale_info) return null;
+    return sale_info[selectChain];
+  }
+  function getMaxDepositAmount(): number {
+    const selectSaleInfo = getSaleInfo();
+    if(!selectSaleInfo) return 0;
+    
+    
+    const payTokenBalance = wei2eth(sale_info.stream.sale_contract.pay_token_balance || '0')
+    const maxDeposit = wei2eth(selectSaleInfo.sale_contract.bnb.max_deposit || '0')
+    const tokenPerBNB = wei2eth(selectSaleInfo.sale_contract.bnb.token_per_bnb || '0')
+    
+    if(tokenPerBNB > 0 && payTokenBalance > 0 && maxDeposit > 0) {
+      const maxPossibleDepositAmount = payTokenBalance / tokenPerBNB
       return Math.min(maxDeposit, maxPossibleDepositAmount)
     }
     return 0;
   }
   function getReceiveAmount(): number {
+    const selectSaleInfo = getSaleInfo();
+    if(!selectSaleInfo) return 0;
+
     const amount = getInputAmount();
     if(amount > 0) {
-      const tokenPerUsd = wei2eth(sale_info?.[selectChain]?.sale_contract?.token_per_usd || '0')
-      if(tokenPerUsd > 0) {
-        return amount * Number(tokenPerUsd)
+      const tokenPerBNB = wei2eth(selectSaleInfo.sale_contract.bnb.token_per_bnb || '0')
+      if(tokenPerBNB > 0) {
+        return amount * Number(tokenPerBNB)
       }
     }
     return 0;
   }
 
-  function isApproved() {
-    if(usdtInfo) {
-      const allowance = wei2token(usdtInfo.allowance, Number(usdtInfo.decimals))
-      if(allowance > 0) {
-        const amount = getInputAmount();
-        if(amount > 0 && allowance < amount) {
-          return false;
-        } 
-        return true;
-      }
-    }
-    
-    return false;
-  }
-
   function getButtonState(): ButtonState {
-    const isPaused = sale_info?.[selectChain]?.sale_contract?.paused || false;
+    const selectSaleInfo = getSaleInfo();
+    if(!selectSaleInfo) return ButtonState.PAUSED;
+
+    const isPaused = selectSaleInfo.sale_contract.bnb.paused || false;
     if(isPaused) {
-        return ButtonState.PAUSED;
+      return ButtonState.PAUSED;
     }
-    if(!isApproved()) {
-      return ButtonState.APPROVE;
-    }
+
     const amount = getInputAmount();
     if(amount > 0 && amount >= getMinDepositAmount()) {
       return ButtonState.PURCHASE;
@@ -303,7 +281,7 @@ export default function SalePage() {
                     color: '#1e40af', 
                     fontWeight: '500' 
                   }}>
-                    BSC 체인 보유 BABI
+                    STREAM 체인 보유 BABI
                   </div>
                   <div style={{ 
                     fontSize: '14px', 
@@ -351,7 +329,7 @@ export default function SalePage() {
                 
                 <select
                   value={selectChain}
-                  onChange={(e) => setSelectChain(e.target.value as 'bsc' | 'eth')}
+                  onChange={(e) => setSelectChain(e.target.value as 'bsc' | 'eth' | 'stream')}
                   style={{
                     padding: '4px 8px',
                     border: '1px solid #d1d5db',
@@ -365,6 +343,7 @@ export default function SalePage() {
                 >
                   <option value="bsc">BSC 체인</option>
                   <option value="eth">ETH 체인</option>
+                  <option value="stream">STREAM 체인</option>
                 </select>
               </div>
               
@@ -383,14 +362,14 @@ export default function SalePage() {
                       fontWeight: '500',
                       marginBottom: '2px'
                     }}>
-                      {selectChain === 'bsc' ? 'BSC' : 'ETH'} 체인 USDT 보유 잔액
+                      {selectChain.toUpperCase()} 체인 {getChainInfoByKey(selectChain).coinSymbol} 보유 잔액
                     </div>
                     <div style={{ 
                       fontSize: '16px', 
                       fontWeight: '700', 
                       color: '#047857' 
                     }}>
-                      {formatNumber(wei2token(usdtInfo.balance, Number(usdtInfo.decimals)), 2)} {usdtInfo.symbol}
+                      {formatNumber(wei2eth(user_info[selectChain].coin_balance), 2)} {getChainInfoByKey(selectChain).coinSymbol}
                     </div>
                   </div>
                 </div>
@@ -408,8 +387,8 @@ export default function SalePage() {
                     fontSize: '12px', 
                     color: '#6b7280' 
                   }}>
-                    <span>1 USDT당 BABI 수량</span>
-                    <span style={{ fontWeight: '600' }}>{formatNumber(Number(wei2eth(sale_info?.[selectChain]?.sale_contract?.token_per_usd || '0')), 2)} BABI</span>
+                    <span>1 {getChainInfoByKey(selectChain).coinSymbol}당 BABI 수량</span>
+                    <span style={{ fontWeight: '600' }}>{formatNumber(Number(wei2eth(sale_info[selectChain]?.sale_contract?.bnb?.token_per_bnb || '0')), 2)} BABI</span>
                   </div>
                   <div style={{ 
                     display: 'flex', 
@@ -419,7 +398,7 @@ export default function SalePage() {
                     marginTop: '2px'
                   }}>
                     <span>최소 구매 금액</span>
-                    <span style={{ fontWeight: '600' }}>{formatNumber(getMinDepositAmount(), 2)} USDT</span>
+                    <span style={{ fontWeight: '600' }}>{formatNumber(getMinDepositAmount(), 4)} {getChainInfoByKey(selectChain).coinSymbol}</span>
                   </div>
                   <div style={{ 
                     display: 'flex', 
@@ -429,7 +408,7 @@ export default function SalePage() {
                     marginTop: '2px' 
                   }}>
                     <span>최대 구매 금액</span>
-                    <span style={{ fontWeight: '600' }}>{formatNumber(getMaxDepositAmount(), 2)} USDT</span>
+                    <span style={{ fontWeight: '600' }}>{formatNumber(getMaxDepositAmount(), 0)} {getChainInfoByKey(selectChain).coinSymbol}</span>
                   </div>
                 </div>
 
@@ -442,7 +421,7 @@ export default function SalePage() {
                     color: '#374151', 
                     marginBottom: '6px' 
                   }}>
-                    구매할 USDT 수량
+                    {`구매할 ${getChainInfoByKey(selectChain).coinSymbol} 수량`}
                   </label>
                   <input
                     type="number"

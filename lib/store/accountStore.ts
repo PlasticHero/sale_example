@@ -24,7 +24,7 @@ interface Actions  {
   addRewardChain: () => Promise<CLIENT_RESULT_CODE>;
   approve: (chain: 'eth' | 'bsc', usdt_token: string) => Promise<CLIENT_RESULT_CODE>;
   deposit: (chain: 'eth' | 'bsc', usdt_token: string, amount: number) => Promise<CLIENT_RESULT_CODE>;
-  depositBNB: (amount: number) => Promise<CLIENT_RESULT_CODE>;
+  depositBNB: (amount: number, chain: 'bsc' | 'eth' | 'stream') => Promise<CLIENT_RESULT_CODE>;
 }
 
 //[작성] 상태 초기값 ====================================================================
@@ -39,6 +39,11 @@ const state: State = {
         in_token_list: []
     },
     eth: {
+        coin_balance: "0",
+        pay_token_balance: "0",
+        in_token_list: []
+    },
+    stream: {
         coin_balance: "0",
         pay_token_balance: "0",
         in_token_list: []
@@ -73,6 +78,27 @@ const state: State = {
           }
       },
       eth: {
+          sale_contract: {
+              address: "",
+              pay_token_balance: "0",
+              paused: false,
+              min_deposit: "0",
+              max_deposit: "0",
+              token_per_usd: "0",
+              bnb: {
+                paused: false,
+                min_deposit: "0",
+                max_deposit: "0",
+                token_per_bnb: "0"
+              }
+          },
+          pay_token_info: {
+              address: "",
+              symbol: "",
+              decimals: 0
+          }
+      },
+      stream: {
           sale_contract: {
               address: "",
               pay_token_balance: "0",
@@ -362,16 +388,16 @@ const actions = (
   },
 
 
-  depositBNB: async (amount: number): Promise<CLIENT_RESULT_CODE> => {
+  depositBNB: async (amount: number, chain: 'bsc' | 'eth' | 'stream'): Promise<CLIENT_RESULT_CODE> => {
     
-    const sale_contract = get().sale_info.bsc.sale_contract.address
+    const sale_contract = get().sale_info[chain].sale_contract.address
     const from = get().address
 
     
     const amountWei = token2wei(amount, 18)
     
     //make tx param
-    const chainInfo = getChainInfoByKey('bsc')
+    const chainInfo = getChainInfoByKey(chain)
     const chainIdHex = `0x${Number(chainInfo.chainId).toString(16)}`
     const paramChain = USE_NETWORKS.find(n => n.chainId === chainIdHex)
     if(!paramChain) {

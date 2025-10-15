@@ -30,7 +30,7 @@ const CHAIN_CORE_INFO_TESTNET = {
     bsc:       { key: CHAIN_KEY.bsc,       chainId:97,       rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545',                explorer: 'https://testnet.bscscan.com'    },
     polygon:   { key: CHAIN_KEY.polygon,   chainId:80002,    rpc: 'https://rpc-amoy.polygon.technology',                           explorer: 'https://amoy.polygonscan.com' },
     pth:       { key: CHAIN_KEY.pth,       chainId:250210,   rpc: 'https://test-rpc.plasticherokorea.com',                         explorer: 'https://test-explorer.plasticherokorea.com'  },
-    stream:    { key: CHAIN_KEY.stream,    chainId:250611,   rpc: 'https://rpc.strmchain.com',                                     explorer: 'https://explorer.strmchain.com'  },
+    stream:    { key: CHAIN_KEY.stream,    chainId:250210,   rpc: 'https://test-rpc.logbrix.ai',                                   explorer: 'https://test-explorer.logbrix.ai'  },
 }
 
 const TARGET_CHAIN_CORE_INFO = IS_MAINNET ? CHAIN_CORE_INFO_MAINNET : CHAIN_CORE_INFO_TESTNET
@@ -82,8 +82,8 @@ export const TARGET_CHAIN_INFO: Record<CHAIN, ChainInfo> = {
         explorer_account: TARGET_CHAIN_CORE_INFO.eth.explorer + "/address/",
         transaction_type: TRANSACTION_TYPE.EIP1559,
         chainName: 'Ethereum' + (IS_MAINNET? '' :  ' Testnet'),
-        coinName: IS_MAINNET ? 'ETH' : 'SepoliaETH',
-        coinSymbol: IS_MAINNET ? 'ETH' : 'SepoliaETH',
+        coinName: IS_MAINNET ? 'ETH' : 'tETH',
+        coinSymbol: IS_MAINNET ? 'ETH' : 'tETH',
         coinDeicmals: 18,
         iconURL:  "",
     },
@@ -188,8 +188,8 @@ export const TARGET_CHAIN_INFO: Record<CHAIN, ChainInfo> = {
         explorer_account: TARGET_CHAIN_CORE_INFO.stream.explorer + "/address/",
         transaction_type: TRANSACTION_TYPE.None,
         chainName: 'Stream' + (IS_MAINNET? '' :  ' Testnet'),
-        coinName: IS_MAINNET ? 'Stream' : 'tStream',
-        coinSymbol: IS_MAINNET ? 'STREAM' : 'tSTREAM',
+        coinName: IS_MAINNET ? 'STC' : 'tSTC',
+        coinSymbol: IS_MAINNET ? 'STC' : 'tSTC',
         coinDeicmals: 18,
         iconURL:  "",
     },
@@ -223,6 +223,8 @@ const makeParamAddChain = (chain: CHAIN): ParamAddChain => {
 export const ACTIVE_NETWORKS: CHAIN[] = [
     CHAIN_KEY.eth,
     CHAIN_KEY.bsc,
+    CHAIN_KEY.stream,
+    
 ]
 export const USE_NETWORKS:ParamAddChain[] = ACTIVE_NETWORKS.map(chain => makeParamAddChain(chain));
 export const TX_WAIT_TIME_MS = 30 * 1000;

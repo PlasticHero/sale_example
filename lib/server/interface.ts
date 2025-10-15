@@ -65,6 +65,7 @@ export interface SaleChainInfo {
 export interface SaleInfo {
     bsc: SaleChainInfo; //BSC 체인 정보
     eth: SaleChainInfo; //ETH 체인 정보
+    stream: SaleChainInfo; //STREAM 체인 정보
 }
 
 export interface UserChainInfo {
@@ -75,6 +76,7 @@ export interface UserChainInfo {
 export interface UserInfo extends HistoryInfo {
     bsc: UserChainInfo; //BSC 체인 정보
     eth: UserChainInfo; //ETH 체인 정보
+    stream: UserChainInfo; //STREAM 체인 정보
 }
 
 export interface UserSaleInfo {
@@ -92,7 +94,7 @@ export interface HistoryData {
     amount: string;//wei
     time: string; //format : 2025-08-28T11:45:44Z
     tx_hash: string;
-    chain: 'bsc' | 'eth';
+    chain: 'bsc' | 'eth' | 'stream';
 }
 
 
